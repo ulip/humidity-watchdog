@@ -24,6 +24,9 @@
 #define LN08 -0.223143551 // natural logarithm of 80%
 #define MIN_AW08_DIFF 300
 
+#define CMDLEN 10
+#define BUFLEN 10
+
 OneWire thermo(2);
 
 byte i;
@@ -34,7 +37,10 @@ double tempDew;
 double tempAw08;
 byte fanSpeed;
 double logHum;
-
+long lastReading;
+char command[CMDLEN];
+char buffer[BUFLEN];
+byte index;
 
 void setup() {
   Serial.begin(9600);
@@ -42,19 +48,44 @@ void setup() {
   initPWM(FREQ);
   setSpeed(0);
   pinMode(TACHO_PIN, INPUT);
+  lastReading = 0;
+  index = 0;
 }
 
 void loop() {
-  readHyt221(0x28, &hum, &tempAir);
-  readDS1820(&tempWall);
-  
-  tempDew = getDewPoint(tempAir, hum);
-  tempAw08 = getAw08(hum, tempDew);
-
-  setFanSpeed(tempWall, tempAw08);
-  
-  sendData();
-  delay(5000);
+  // if more than one second has passed read sensors again
+  if (abs(lastReading - millis()) > 1000) {
+    readHyt221(0x28, &hum, &tempAir);
+    readDS1820(&tempWall);
+    tempDew = getDewPoint(tempAir, hum);
+    tempAw08 = getAw08(hum, tempDew);
+    setFanSpeed(tempWall, tempAw08);
+    lastReading = millis();
+  }
+  // read bytes from serial port
+  if (Serial.available() > 0) {
+    buffer[index] = Serial.read();
+    // if newline is received, the command is complete
+    if (buffer[index] == '\n') {
+      strcpy(command, buffer);
+      index = 0;
+    }
+    // stop incrementing index at end of buffer to avoid overflow
+    else if (index >= BUFLEN){
+      index = BUFLEN - 1;
+    }
+    // increment index to read next character
+    else {
+      index++;
+    }
+  }
+  // react to received command
+  if (strcmp(command, "")) {
+    if (!strcmp(command, "meas\n") || !strcmp(command, "MEAS\n")) {
+      sendData();
+    }
+    strcpy(command, "");
+  }
 }
 
 void sendData() {

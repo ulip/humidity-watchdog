@@ -16,6 +16,7 @@ last_line = ''
 buf = ''
 
 while True:
+    ser.write('meas\n')
     buf += ser.read(ser.inWaiting())
     if '\n' in buf:
         last_line, buf = buf.split('\n')[-2:]

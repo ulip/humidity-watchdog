@@ -35,6 +35,7 @@ class MonitorWindow(QtGui.QMainWindow):
     def __init__(self):
         QtGui.QMainWindow.__init__(self)
         # self.ser = serial.Serial('/dev/ttyUSB0', baudrate=9600, timeout=4)
+        self.ser = open('climate_2014-04-26.log', 'r')
         self.monDlg = monitor_ui.Ui_monitorWindow()
         self.monDlg.setupUi(self)
 
@@ -44,13 +45,15 @@ class MonitorWindow(QtGui.QMainWindow):
         self.saveTimer = QtCore.QTimer()
         self.saveTimer.start(1800000) # save file every 30 minutes
         # set up data arrays
-        self.numPoints = 100 # 17280 # 24 hours with one point every 5 seconds
-        self.t = np.linspace(0, 24, self.numPoints)
-        self.relHum = np.zeros(self.numPoints)
-        self.tempAir = self.t
+        self.numPoints = 24 # 17280 # 24 hours with one point every 5 seconds
+        # self.t = np.linspace(-self.numPoints, 0, self.numPoints)
+        self.t = np.zeros(self.numPoints)
+        self.relHum = np.zeros_like(self.t)
+        self.relHum[-1] = 50
+        self.tempAir = np.zeros_like(self.t)
         self.curve1 = Qwt.QwtPlotCurve() # make a curve
         self.curve1.attach(self.monDlg.history)
-        #self.curve2 = Qwt.QwtPlotCurve()
+        self.curve2 = Qwt.QwtPlotCurve()
         #self.curve2.attach(self.monDlg.history)
 
         self.updateValues()
@@ -66,16 +69,21 @@ class MonitorWindow(QtGui.QMainWindow):
     def updateValues(self):
         self.t = np.roll(self.t, -1)
         self.relHum = np.roll(self.relHum, -1)
-        self.relHum[-1] = 20 + 20*np.sin(2 * np.pi * self.t[-1] / 24.0)
-        #self.tempAir = np.roll(self.tempAir, -1)
+        self.tempAir = np.roll(self.tempAir, -1)
+        self.t[-1], self.relHum[-1] = self.getMeasurement()
+
         self.curve1.setData(self.t, self.relHum)
-        #self.curve2.setData(self.t, self.tempAir)
+        self.curve2.setData(self.t, self.tempAir)
+
         self.monDlg.history.replot()
         self.monDlg.thermoAir.setValue(self.tempAir[-1])
         self.monDlg.hygroAir.setValue(self.relHum[-1])
 
     def getMeasurement(self):
-        pass
+        line = self.ser.readline().split()
+        t = float(line[3])
+        hum = float(line[4])
+        return t, hum
 
 
 def main():
@@ -86,5 +94,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-

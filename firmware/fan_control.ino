@@ -1,5 +1,4 @@
 // TODO: add check for blocked fan
-// TODO: add measure command
 // TODO: detect open window and set fan full speed
 
 #include <OneWire.h>
@@ -22,7 +21,7 @@
 #define K3 241.2
 
 #define LN08 -0.223143551 // natural logarithm of 80%
-#define MIN_AW08_DIFF 300
+#define MIN_AW08_DIFF 150
 
 #define CMDLEN 10
 #define BUFLEN 10
@@ -41,6 +40,7 @@ long lastReading;
 char command[CMDLEN];
 char buffer[BUFLEN];
 byte index;
+boolean enableFan;
 
 void setup() {
   Serial.begin(9600);
@@ -50,6 +50,7 @@ void setup() {
   pinMode(TACHO_PIN, INPUT);
   lastReading = 0;
   index = 0;
+  enableFan = true;
 }
 
 void loop() {
@@ -59,7 +60,9 @@ void loop() {
     readDS1820(&tempWall);
     tempDew = getDewPoint(tempAir, hum);
     tempAw08 = getAw08(hum, tempDew);
-    setFanSpeed(tempWall, tempAw08);
+    if(enableFan) {
+      setFanSpeed(tempWall, tempAw08);
+    }
     lastReading = millis();
   }
   // read bytes from serial port
@@ -67,7 +70,8 @@ void loop() {
     buffer[index] = Serial.read();
     // if newline is received, the command is complete
     if (buffer[index] == '\n') {
-      strcpy(command, buffer);
+      strncpy(command, buffer, index);
+      strcat(command, "\0");
       index = 0;
     }
     // stop incrementing index at end of buffer to avoid overflow
@@ -81,10 +85,21 @@ void loop() {
   }
   // react to received command
   if (strcmp(command, "")) {
-    if (!strcmp(command, "meas\n") || !strcmp(command, "MEAS\n")) {
+    if (!strcmp(command, "meas") || !strcmp(command, "MEAS")) {
       sendData();
     }
-    strcpy(command, "");
+    if (!strcmp(command, "fan off") || !strcmp(command, "FAN OFF")) {
+      enableFan = false;
+      setSpeed(0);
+      Serial.print("Fan off. OK.\n");
+    }
+    if (!strcmp(command, "fan on") || !strcmp(command, "FAN ON")) {
+      enableFan = true;
+      Serial.print("Fan on. OK.\n");
+    }
+    for (i = 0; i < CMDLEN; i++) {
+      command[i] = '\0';
+    }
   }
 }
 
